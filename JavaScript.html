@@ -1,0 +1,844 @@
+<script>
+  // ===== グローバル変数 =====
+  let currentWeekStart = new Date(); // 現在の週の開始日
+  let clientsData = []; // クライアントデータ
+  let sessionsData = []; // セッションデータ
+  let selectedSessionId = null; // 選択中のセッションID
+  
+  // ===== 初期化処理 =====
+  document.addEventListener('DOMContentLoaded', function() {
+    // クライアントサイドだけで動作するダミーデータの表示（後でサーバーサイドに置き換え）
+    initializeDummyData();
+    
+    // フィルタータブのイベントリスナー設定
+    setupFilterTabs();
+    
+    // モーダルの閉じるボタン設定
+    setupModalCloseEvents();
+  });
+  
+  // ===== ダッシュボードデータの読み込み =====
+  function loadDashboardData() {
+    showLoadingIndicator();
+    
+    // 実際のデータ取得
+    google.script.run
+      .withSuccessHandler(updateDashboard)
+      .withFailureHandler(handleError)
+      .getDashboardData();
+  }
+  
+  // ===== ダッシュボード更新（最終的なデータ連携関数） =====
+  function updateDashboard(data) {
+    hideLoadingIndicator();
+    
+    if (data.error) {
+      alert(data.error);
+      return;
+    }
+    
+    // サマリー情報更新
+    updateSummarySection(data.summary);
+    
+    // 直近のセッション更新
+    updateUpcomingSessions(data.upcomingSessions);
+    
+    // 対応タスク更新
+    updatePendingTasks(data.pendingTasks);
+    
+    // クライアント一覧更新
+    updateClientsTable(data.clients);
+    
+    // 週間スケジュール更新
+    updateWeeklySchedule(data.weeklySchedule);
+  }
+  
+  // ===== サマリーセクション更新 =====
+  function updateSummarySection(summary) {
+    if (!summary) return;
+    
+    // クライアント情報
+    document.querySelector('.summary-card:nth-child(1) .big-number').textContent = summary.clients.total;
+    document.querySelector('.summary-card:nth-child(1) .number-details div:nth-child(1) span').textContent = summary.clients.trial;
+    document.querySelector('.summary-card:nth-child(1) .number-details div:nth-child(2) span').textContent = summary.clients.contracted;
+    
+    // セッション情報
+    document.querySelector('.summary-card:nth-child(2) .big-number').textContent = summary.sessions.upcoming;
+    document.querySelector('.summary-card:nth-child(2) .number-details div:nth-child(1) span').textContent = summary.sessions.thisWeek;
+    document.querySelector('.summary-card:nth-child(2) .number-details div:nth-child(2) span').textContent = summary.sessions.thisMonth;
+    
+    // 収益情報
+    document.querySelector('.summary-card:nth-child(3) .big-number').textContent = summary.revenue.total;
+    document.querySelector('.summary-card:nth-child(3) .number-details div:nth-child(1) span').textContent = summary.revenue.received + '万円';
+    document.querySelector('.summary-card:nth-child(3) .number-details div:nth-child(2) span').textContent = summary.revenue.pending + '万円';
+  }
+  
+  // ===== 直近のセッション更新 =====
+  function updateUpcomingSessions(sessions) {
+    if (!sessions || sessions.length === 0) {
+      document.getElementById('upcoming-sessions').innerHTML = '<div class="action-item"><div class="action-details">予定されているセッションはありません</div></div>';
+      return;
+    }
+    
+    const container = document.getElementById('upcoming-sessions');
+    container.innerHTML = ''; // クリア
+    
+    sessions.forEach(session => {
+      const item = document.createElement('div');
+      item.className = `action-item ${session.isHighlighted ? 'highlight' : ''}`;
+      
+      item.innerHTML = `
+        <div class="action-time">
+          <div class="date">${session.date}</div>
+          <div class="time">${session.time}</div>
+        </div>
+        <div class="action-details">
+          <div class="action-title">${session.clientName}様（${session.type}${session.sessionNumber ? session.sessionNumber + '回目' : ''}）</div>
+          <div class="action-meta">${session.format === 'オンライン' ? 'Google Meet' : '対面セッション'}</div>
+        </div>
+        <div class="action-buttons">
+          ${session.meetUrl ? `
+            <button class="btn-icon" title="Google Meetに参加" onclick="joinMeeting('${session.meetUrl}')">
+              <i class="fas fa-video"></i>
+            </button>
+          ` : ''}
+          <button class="btn-icon" title="詳細" onclick="viewSessionDetails('${session.id}')">
+            <i class="fas fa-info-circle"></i>
+          </button>
+        </div>
+      `;
+      
+      container.appendChild(item);
+    });
+  }
+  
+  // ===== 対応タスク更新 =====
+  function updatePendingTasks(tasks) {
+    if (!tasks || tasks.length === 0) {
+      document.getElementById('pending-tasks').innerHTML = '<div class="action-item"><div class="action-details">現在対応が必要なタスクはありません</div></div>';
+      return;
+    }
+    
+    const container = document.getElementById('pending-tasks');
+    container.innerHTML = ''; // クリア
+    
+    tasks.forEach(task => {
+      const item = document.createElement('div');
+      item.className = 'action-item';
+      
+      // タスクタイプに応じた内容を生成
+      let content = '';
+      let actionButton = '';
+      
+      switch (task.type) {
+        case 'new_applicants':
+          content = `
+            <div class="action-icon ${task.iconType}">
+              <i class="fas fa-${task.icon}"></i>
+            </div>
+            <div class="action-details">
+              <div class="action-title">${task.title}</div>
+              <div class="action-meta">${task.clients.map(c => c.name).join('、')} (${task.count}名)</div>
+            </div>
+          `;
+          actionButton = `
+            <button class="btn-icon" title="対応する" onclick="handleNewApplicants()">
+              <i class="fas fa-arrow-right"></i>
+            </button>
+          `;
+          break;
+          
+        case 'scheduling':
+          content = `
+            <div class="action-icon ${task.iconType}">
+              <i class="fas fa-${task.icon}"></i>
+            </div>
+            <div class="action-details">
+              <div class="action-title">${task.title}</div>
+              <div class="action-meta">${task.clients.map(c => `${c.name}様（${c.stage}）`).join('、')}</div>
+            </div>
+          `;
+          actionButton = `
+            <button class="btn-icon" title="対応する" onclick="scheduleSession('${task.clients[0].id}')">
+              <i class="fas fa-arrow-right"></i>
+            </button>
+          `;
+          break;
+          
+        case 'payment':
+          content = `
+            <div class="action-icon ${task.iconType}">
+              <i class="fas fa-${task.icon}"></i>
+            </div>
+            <div class="action-details">
+              <div class="action-title">${task.title}</div>
+              <div class="action-meta">${task.clients.map(c => `${c.name}様（${c.item}）`).join('、')}</div>
+            </div>
+          `;
+          actionButton = `
+            <button class="btn-icon" title="詳細" onclick="viewClientDetails('${task.clients[0].id}')">
+              <i class="fas fa-arrow-right"></i>
+            </button>
+          `;
+          break;
+          
+        case 'reminder':
+          content = `
+            <div class="action-icon ${task.iconType}">
+              <i class="fas fa-${task.icon}"></i>
+            </div>
+            <div class="action-details">
+              <div class="action-title">${task.title}</div>
+              <div class="action-meta">${task.sessions.map(s => `${s.clientName}様（${s.type}${s.sessionNumber ? s.sessionNumber + '回目' : ''}）`).join('、')}</div>
+            </div>
+          `;
+          actionButton = `
+            <button class="btn-icon" title="メール送信" onclick="sendReminder('${task.sessions[0].id}')">
+              <i class="fas fa-paper-plane"></i>
+            </button>
+          `;
+          break;
+          
+        default:
+          content = `
+            <div class="action-icon">
+              <i class="fas fa-tasks"></i>
+            </div>
+            <div class="action-details">
+              <div class="action-title">${task.title}</div>
+              <div class="action-meta">詳細情報なし</div>
+            </div>
+          `;
+          actionButton = `
+            <button class="btn-icon" title="詳細">
+              <i class="fas fa-arrow-right"></i>
+            </button>
+          `;
+      }
+      
+      item.innerHTML = `
+        ${content}
+        <div class="action-buttons">
+          ${actionButton}
+        </div>
+      `;
+      
+      container.appendChild(item);
+    });
+  }
+  
+  // ===== クライアント一覧更新 =====
+  function updateClientsTable(clients) {
+    if (!clients || clients.length === 0) {
+      document.querySelector('#clients-table tbody').innerHTML = '<tr><td colspan="6" class="text-center">クライアントデータがありません</td></tr>';
+      return;
+    }
+    
+    const tableBody = document.querySelector('#clients-table tbody');
+    tableBody.innerHTML = ''; // クリア
+    
+    clients.forEach(client => {
+      const row = document.createElement('tr');
+      
+      row.innerHTML = `
+        <td><a href="#" onclick="viewClientDetails('${client.id}'); return false;">${client.name}</a></td>
+        <td><span class="status-badge ${client.stage}">${client.stageLabel}</span></td>
+        <td>${client.nextSession}</td>
+        <td><span class="status-badge ${client.paymentStatusType}">${client.paymentStatus}</span></td>
+        <td>
+          <div class="progress-bar">
+            <div class="progress" style="width: ${client.progress.percentage}%;" title="${client.progress.completed}/${client.progress.total}回完了"></div>
+          </div>
+          <div class="progress-text">${client.progress.completed}/${client.progress.total}</div>
+        </td>
+        <td>
+          <button class="btn-icon" title="詳細" onclick="viewClientDetails('${client.id}')">
+            <i class="fas fa-eye"></i>
+          </button>
+          <button class="btn-icon" title="メール送信" onclick="emailClient('${client.id}')">
+            <i class="fas fa-envelope"></i>
+          </button>
+        </td>
+      `;
+      
+      tableBody.appendChild(row);
+    });
+  }
+  
+  // ===== 週間スケジュール更新 =====
+  function updateWeeklySchedule(schedule) {
+    if (!schedule || schedule.length === 0) return;
+    
+    // タイトル更新
+    const startDate = new Date(schedule[0].date);
+    const endDate = new Date(schedule[schedule.length - 1].date);
+    
+    const formatDate = (date) => {
+      return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+    };
+    
+    document.getElementById('calendar-title').textContent = `${formatDate(startDate)} - ${formatDate(endDate)}`;
+    
+    // グリッド更新
+    const grid = document.querySelector('.calendar-grid');
+    grid.innerHTML = ''; // クリア
+    
+    schedule.forEach(day => {
+      const dayElement = document.createElement('div');
+      dayElement.className = 'calendar-day';
+      
+      let events = '';
+      if (day.events && day.events.length > 0) {
+        events = day.events.map(event => `
+          <div class="calendar-event">
+            <div class="event-time">${event.time}</div>
+            <div class="event-title">${event.clientName}様（${event.type}${event.sessionNumber ? event.sessionNumber + '回目' : ''}）</div>
+          </div>
+        `).join('');
+      }
+      
+      dayElement.innerHTML = `
+        <div class="day-header">${day.display}</div>
+        <div class="day-events">
+          ${events}
+        </div>
+      `;
+      
+      grid.appendChild(dayElement);
+    });
+  }
+  
+  // ===== ローディングインジケータ =====
+  function showLoadingIndicator() {
+    document.getElementById('loading-overlay').style.display = 'flex';
+  }
+  
+  function hideLoadingIndicator() {
+    document.getElementById('loading-overlay').style.display = 'none';
+  }
+  
+  // ===== データ更新ボタン =====
+  function refreshData() {
+    loadDashboardData();
+  }
+  
+  // ===== フィルタータブの設定 =====
+  function setupFilterTabs() {
+    const filterTabs = document.querySelectorAll('.filter-tab');
+    filterTabs.forEach(tab => {
+      tab.addEventListener('click', function() {
+        // アクティブクラスを切り替え
+        filterTabs.forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        
+        // フィルター適用
+        const filter = this.getAttribute('data-filter');
+        filterClients(filter);
+      });
+    });
+  }
+  
+  // ===== クライアントフィルタリング =====
+  function filterClients(filter) {
+    const rows = document.querySelectorAll('#clients-table tbody tr');
+    
+    if (filter === 'all') {
+      rows.forEach(row => row.style.display = '');
+      return;
+    }
+    
+    rows.forEach(row => {
+      const statusCell = row.querySelector('td:nth-child(2) .status-badge');
+      if (statusCell) {
+        const status = statusCell.classList.contains(filter);
+        row.style.display = status ? '' : 'none';
+      }
+    });
+  }
+  
+  // ===== モーダル関連 =====
+  function openNewSessionModal() {
+    document.getElementById('new-session-modal').style.display = 'block';
+  }
+  
+  function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+  }
+  
+  function setupModalCloseEvents() {
+    // モーダル外クリックで閉じる
+    window.addEventListener('click', function(event) {
+      const modals = document.querySelectorAll('.modal');
+      modals.forEach(modal => {
+        if (event.target === modal) {
+          modal.style.display = 'none';
+        }
+      });
+    });
+    
+    // ESCキーでモーダルを閉じる
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'Escape') {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+          modal.style.display = 'none';
+        });
+      }
+    });
+  }
+  
+  // ===== セッション関連 =====
+  function createNewSession() {
+    const client = document.getElementById('client-select').value;
+    const sessionType = document.getElementById('session-type').value;
+    const sessionDate = document.getElementById('session-date').value;
+    const sessionFormat = document.getElementById('session-format').value;
+    
+    if (!client || !sessionDate) {
+      alert('クライアントと日時を選択してください');
+      return;
+    }
+    
+    showLoadingIndicator();
+    
+    // セッション作成
+    google.script.run
+      .withSuccessHandler(onSessionCreated)
+      .withFailureHandler(handleError)
+      .scheduleNewSession(client, sessionType, sessionDate, sessionFormat);
+  }
+  
+  function onSessionCreated(result) {
+    hideLoadingIndicator();
+    
+    if (result.success) {
+      closeModal('new-session-modal');
+      alert('新規セッションを作成しました！');
+      loadDashboardData(); // データを再ロード
+    } else {
+      alert('エラー: ' + (result.error || 'セッション作成に失敗しました'));
+    }
+  }
+  
+  function viewSessionDetails(sessionId) {
+    selectedSessionId = sessionId;
+    showLoadingIndicator();
+    
+    // ここでサーバーからセッション詳細を取得する実装を追加
+    // 現在のテスト実装ではダミーデータを表示
+    
+    // セッション詳細のダミーデータ
+    const sessionDetails = {
+      id: sessionId,
+      client: {
+        id: 'C001',
+        name: '山田太郎'
+      },
+      type: 'トライアル',
+      date: '2025年4月11日 13:00',
+      format: 'オンライン（Google Meet）',
+      meetUrl: 'https://meet.google.com/abc-defg-hij',
+      status: '予定済',
+      notes: ''
+    };
+    
+    setTimeout(() => {
+      hideLoadingIndicator();
+      
+      // モーダル内容の更新
+      const content = document.getElementById('session-details-content');
+      content.innerHTML = `
+        <div class="details-group">
+          <div class="details-label">クライアント:</div>
+          <div class="details-value">${sessionDetails.client.name}</div>
+        </div>
+        <div class="details-group">
+          <div class="details-label">セッション種別:</div>
+          <div class="details-value">${sessionDetails.type}</div>
+        </div>
+        <div class="details-group">
+          <div class="details-label">日時:</div>
+          <div class="details-value">${sessionDetails.date}</div>
+        </div>
+        <div class="details-group">
+          <div class="details-label">形式:</div>
+          <div class="details-value">${sessionDetails.format}</div>
+        </div>
+        ${sessionDetails.meetUrl ? `
+        <div class="details-group">
+          <div class="details-label">Google Meet:</div>
+          <div class="details-value">
+            <a href="${sessionDetails.meetUrl}" target="_blank">${sessionDetails.meetUrl}</a>
+          </div>
+        </div>
+        ` : ''}
+        <div class="details-group">
+          <div class="details-label">ステータス:</div>
+          <div class="details-value">${sessionDetails.status}</div>
+        </div>
+        <div class="details-group">
+          <div class="details-label">備考:</div>
+          <div class="details-value">
+            <textarea id="session-notes" class="form-control" rows="3">${sessionDetails.notes}</textarea>
+          </div>
+        </div>
+        <div class="details-group">
+          <div class="details-label">アクション:</div>
+          <div class="details-value">
+            <button class="btn btn-info" onclick="sendReminderEmail('${sessionId}')">
+              <i class="fas fa-paper-plane"></i> リマインダー送信
+            </button>
+            <button class="btn btn-warning" onclick="rescheduleSession('${sessionId}')">
+              <i class="fas fa-calendar-alt"></i> 日程変更
+            </button>
+          </div>
+        </div>
+      `;
+      
+      // モーダルを表示
+      document.getElementById('session-details-modal').style.display = 'block';
+    }, 500);
+  }
+  
+  function completeSession() {
+    if (!selectedSessionId) return;
+    
+    const notes = document.getElementById('session-notes').value;
+    
+    showLoadingIndicator();
+    
+    // セッション完了処理
+    google.script.run
+      .withSuccessHandler(onSessionCompleted)
+      .withFailureHandler(handleError)
+      .completeSession(selectedSessionId, notes);
+  }
+  
+  function onSessionCompleted(result) {
+    hideLoadingIndicator();
+    
+    if (result && result.success) {
+      closeModal('session-details-modal');
+      alert('セッションを完了しました！');
+      loadDashboardData(); // データを再ロード
+    } else {
+      alert('エラー: ' + (result.error || 'セッション完了処理に失敗しました'));
+    }
+  }
+  
+  // ===== クライアント関連 =====
+  // 現在選択中のクライアントID
+  let selectedClientId = null;
+
+  // クライアント詳細を表示
+  function viewClientDetails(clientId) {
+    selectedClientId = clientId;
+    
+    // データ取得開始
+    showLoadingIndicator();
+    
+    // クライアント詳細を取得
+    google.script.run
+      .withSuccessHandler(displayClientDetails)
+      .withFailureHandler(handleError)
+      .getClientDetails(clientId);
+  }
+
+  // クライアント詳細データをモーダルに表示
+  function displayClientDetails(clientData) {
+    if (clientData.error) {
+      hideLoadingIndicator();
+      alert(clientData.error);
+      return;
+    }
+    
+    // 基本情報表示
+    document.getElementById('client-name-header').textContent = clientData.basicInfo.name + ' 様';
+    document.getElementById('client-name').textContent = clientData.basicInfo.name;
+    document.getElementById('client-name-kana').textContent = clientData.basicInfo.nameKana;
+    document.getElementById('client-email').textContent = clientData.basicInfo.email;
+    document.getElementById('client-phone').textContent = clientData.basicInfo.phone;
+    document.getElementById('client-gender').textContent = clientData.basicInfo.gender;
+    document.getElementById('client-birthdate').textContent = formatDate(clientData.basicInfo.birthdate);
+    document.getElementById('client-address').textContent = clientData.basicInfo.address;
+    document.getElementById('client-session-format').textContent = clientData.basicInfo.sessionFormat;
+    document.getElementById('client-notes').textContent = clientData.basicInfo.notes;
+    document.getElementById('client-next-session').textContent = clientData.basicInfo.nextSession || '未設定';
+    
+    // セッション履歴表示
+    const sessionsTableBody = document.getElementById('sessions-table-body');
+    sessionsTableBody.innerHTML = '';
+    
+    if (clientData.sessions && clientData.sessions.length > 0) {
+      clientData.sessions.forEach(session => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${session.dateTime}</td>
+          <td>${session.type}</td>
+          <td>${session.number}</td>
+          <td>${session.format}</td>
+          <td><span class="status-badge ${session.status === '完了' ? 'success' : 'info'}">${session.status}</span></td>
+          <td>
+            <button class="btn-icon" onclick="viewSessionDetails('${session.id}')">
+              <i class="fas fa-eye"></i>
+            </button>
+          </td>
+        `;
+        sessionsTableBody.appendChild(row);
+      });
+    } else {
+      const row = document.createElement('tr');
+      row.innerHTML = '<td colspan="6" class="text-center">セッション履歴がありません</td>';
+      sessionsTableBody.appendChild(row);
+    }
+    
+    // 支払い履歴表示
+    const paymentsTableBody = document.getElementById('payments-table-body');
+    paymentsTableBody.innerHTML = '';
+    
+    if (clientData.payments && clientData.payments.length > 0) {
+      clientData.payments.forEach(payment => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${payment.date}</td>
+          <td>${payment.item}</td>
+          <td>${payment.amount.toLocaleString()}円</td>
+          <td><span class="status-badge ${payment.status === '入金済' ? 'success' : 'warning'}">${payment.status}</span></td>
+          <td>${payment.notes || '-'}</td>
+        `;
+        paymentsTableBody.appendChild(row);
+      });
+    } else {
+      const row = document.createElement('tr');
+      row.innerHTML = '<td colspan="5" class="text-center">支払い履歴がありません</td>';
+      paymentsTableBody.appendChild(row);
+    }
+    
+    // メモ表示
+    const notesContainer = document.getElementById('session-notes-container');
+    notesContainer.innerHTML = '';
+    
+    if (clientData.notes && clientData.notes.length > 0) {
+      clientData.notes.forEach(note => {
+        const noteDiv = document.createElement('div');
+        noteDiv.className = 'note-item';
+        noteDiv.innerHTML = `
+          <div class="note-header">
+            <div class="note-title">セッションメモ</div>
+            <div class="note-date">${note.date}</div>
+          </div>
+          <div class="note-content">${note.content}</div>
+        `;
+        notesContainer.appendChild(noteDiv);
+      });
+    } else {
+      notesContainer.innerHTML = '<p>メモがありません</p>';
+    }
+    
+    // タブの設定
+    setupTabs();
+    
+    // モーダルを表示
+    hideLoadingIndicator();
+    document.getElementById('client-details-modal').style.display = 'block';
+  }
+
+  // タブ切り替え設定
+  function setupTabs() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', function() {
+        // アクティブタブの切り替え
+        tabBtns.forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        
+        // コンテンツの切り替え
+        const tabId = this.getAttribute('data-tab');
+        tabContents.forEach(content => {
+          content.classList.remove('active');
+        });
+        document.getElementById(tabId).classList.add('active');
+      });
+    });
+  }
+
+  // 日付フォーマット関数
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    
+    if (dateStr instanceof Date) {
+      return `${dateStr.getFullYear()}年${dateStr.getMonth() + 1}月${dateStr.getDate()}日`;
+    }
+    
+    // 文字列から変換
+    try {
+      const date = new Date(dateStr);
+      return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  // 選択中のクライアントに新規セッションを予約
+  function scheduleNewSessionForClient() {
+    if (!selectedClientId) return;
+    
+    // クライアント選択を設定してからモーダルを開く
+    document.getElementById('client-select').value = selectedClientId;
+    closeModal('client-details-modal');
+    openNewSessionModal();
+  }
+
+  // 選択中のクライアントにメール送信
+  function emailSelectedClient() {
+    if (!selectedClientId) return;
+    
+    // メール送信（実装予定）
+    // TODO: メール送信モーダルを開く
+    alert(`クライアントにメール送信: ${selectedClientId}`);
+  }
+
+  // クライアントメモの保存
+  function saveClientNote() {
+    if (!selectedClientId) return;
+    
+    const noteContent = document.getElementById('new-note-content').value.trim();
+    if (!noteContent) {
+      alert('メモを入力してください');
+      return;
+    }
+    
+    showLoadingIndicator();
+    
+    // メモを保存
+    google.script.run
+      .withSuccessHandler(onNoteSaved)
+      .withFailureHandler(handleError)
+      .saveClientNote(selectedClientId, noteContent);
+  }
+  
+  function onNoteSaved(result) {
+    hideLoadingIndicator();
+    
+    if (result && result.success) {
+      // メモを追加
+      const notesContainer = document.getElementById('session-notes-container');
+      const noteDiv = document.createElement('div');
+      noteDiv.className = 'note-item';
+      
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}`;
+      
+      noteDiv.innerHTML = `
+        <div class="note-header">
+          <div class="note-title">新規メモ</div>
+          <div class="note-date">${dateStr}</div>
+        </div>
+        <div class="note-content">${document.getElementById('new-note-content').value}</div>
+      `;
+      
+      if (notesContainer.innerHTML === '<p>メモがありません</p>') {
+        notesContainer.innerHTML = '';
+      }
+      
+      notesContainer.insertBefore(noteDiv, notesContainer.firstChild);
+      document.getElementById('new-note-content').value = '';
+      
+      alert('メモを保存しました！');
+    } else {
+      alert('エラー: ' + (result.error || 'メモの保存に失敗しました'));
+    }
+  }
+  
+  function emailClient(clientId) {
+    // メール送信（実装予定）
+    // TODO: メール送信モーダルを開く
+    alert(`クライアントにメール送信: ${clientId} （実装予定）`);
+  }
+  
+  // ===== タスク関連 =====
+  function handleNewApplicants() {
+    alert('新規申込対応画面へ移動します（実装予定）');
+  }
+  
+  function scheduleSession(clientId) {
+    document.getElementById('client-select').value = clientId;
+    openNewSessionModal();
+  }
+  
+  function sendReminder(sessionId) {
+    showLoadingIndicator();
+    
+    // リマインダー送信
+    google.script.run
+      .withSuccessHandler(onReminderSent)
+      .withFailureHandler(handleError)
+      .sendReminderEmail(sessionId);
+  }
+  
+  function onReminderSent(result) {
+    hideLoadingIndicator();
+    
+    if (result && result.success) {
+      alert('リマインダーを送信しました！');
+      loadDashboardData(); // データを再ロード
+    } else {
+      alert('エラー: ' + (result.error || 'リマインダー送信に失敗しました'));
+    }
+  }
+  
+  // ===== カレンダー関連 =====
+  function previousWeek() {
+    // 1週間前に移動
+    currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+    updateCalendarView();
+  }
+  
+  function nextWeek() {
+    // 1週間後に移動
+    currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+    updateCalendarView();
+  }
+  
+  function updateCalendarView() {
+    // カレンダータイトル更新
+    updateCalendarTitle();
+    
+    // カレンダーグリッド更新
+    loadDashboardData();
+  }
+  
+  function updateCalendarTitle() {
+    const endDate = new Date(currentWeekStart);
+    endDate.setDate(endDate.getDate() + 6);
+    
+    const formatDate = (date) => {
+      return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+    };
+    
+    document.getElementById('calendar-title').textContent = 
+      `${formatDate(currentWeekStart)} - ${formatDate(endDate)}`;
+  }
+  
+  // ===== Google Meet =====
+  function joinMeeting(url) {
+    window.open(url, '_blank');
+  }
+  
+  // ===== エラーハンドリング =====
+  function handleError(error) {
+    hideLoadingIndicator();
+    console.error('エラーが発生しました:', error);
+    alert('処理中にエラーが発生しました。もう一度お試しください。');
+  }
+  
+  // ===== 初期化用ダミー関数（実装前のテスト用）=====
+  function initializeDummyData() {
+    // データロードをシミュレート（実際の実装では削除）
+    setTimeout(() => {
+      loadDashboardData();
+    }, 500);
+  }
+</script>
