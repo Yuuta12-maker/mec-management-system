@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>マインドエンジニアリング・コーチング 管理ダッシュボード</title>
+  <?!= include('CSS'); ?>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <!-- ローディングインジケータ -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- ヘッダー -->
+  <header>
+    <div class="logo">
+      <i class="fas fa-brain"></i> マインドエンジニアリング・コーチング
+    </div>
+    <div class="header-actions">
+      <button class="refresh-btn" onclick="refreshData()">
+        <i class="fas fa-sync-alt"></i> 更新
+      </button>
+    </div>
+  </header>
+
+  <!-- メインコンテンツ -->
+  <main>
+    <!-- サマリーセクション -->
+    <section id="summary-section" class="dashboard-section">
+      <div class="summary-cards">
+        <div class="summary-card">
+          <div class="summary-icon">
+            <i class="fas fa-users"></i>
+          </div>
+          <div class="summary-content">
+            <h3>クライアント</h3>
+            <div class="summary-numbers">
+              <span class="big-number">12</span>
+              <div class="number-details">
+                <div><i class="fas fa-handshake"></i> トライアル: <span>3</span></div>
+                <div><i class="fas fa-user-check"></i> 契約済: <span>9</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="summary-card">
+          <div class="summary-icon">
+            <i class="fas fa-calendar-check"></i>
+          </div>
+          <div class="summary-content">
+            <h3>セッション</h3>
+            <div class="summary-numbers">
+              <span class="big-number">5</span>
+              <div class="number-details">
+                <div><i class="fas fa-calendar-day"></i> 今週: <span>3</span></div>
+                <div><i class="fas fa-calendar-week"></i> 今月: <span>14</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="summary-card">
+          <div class="summary-icon">
+            <i class="fas fa-yen-sign"></i>
+          </div>
+          <div class="summary-content">
+            <h3>収益</h3>
+            <div class="summary-numbers">
+              <span class="big-number">66</span><span class="unit">万円</span>
+              <div class="number-details">
+                <div><i class="fas fa-check-circle"></i> 入金済: <span>60万円</span></div>
+                <div><i class="fas fa-clock"></i> 未入金: <span>6万円</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- アクションセクション -->
+    <section class="dashboard-section dual-section">
+      <div class="left-panel">
+        <div class="section-header">
+          <h2><i class="fas fa-calendar-day"></i> 直近のセッション</h2>
+          <button class="action-btn" onclick="openNewSessionModal()">
+            <i class="fas fa-plus"></i> 新規セッション
+          </button>
+        </div>
+        <div id="upcoming-sessions" class="action-list">
+          <!-- 最も近いセッションを強調表示 -->
+          <div class="action-item highlight">
+            <div class="action-time">
+              <div class="date">明日</div>
+              <div class="time">13:00</div>
+            </div>
+            <div class="action-details">
+              <div class="action-title">山田太郎様（トライアル）</div>
+              <div class="action-meta">Google Meet</div>
+            </div>
+            <div class="action-buttons">
+              <button class="btn-icon" title="Google Meetに参加" onclick="joinMeeting('https://meet.google.com/abc-defg-hij')">
+                <i class="fas fa-video"></i>
+              </button>
+              <button class="btn-icon" title="詳細" onclick="viewSessionDetails('S001')">
+                <i class="fas fa-info-circle"></i>
+              </button>
+            </div>
+          </div>
+          
+          <div class="action-item">
+            <div class="action-time">
+              <div class="date">4/15</div>
+              <div class="time">15:00</div>
+            </div>
+            <div class="action-details">
+              <div class="action-title">佐藤花子様（3回目）</div>
+              <div class="action-meta">対面セッション</div>
+            </div>
+            <div class="action-buttons">
+              <button class="btn-icon" title="詳細" onclick="viewSessionDetails('S002')">
+                <i class="fas fa-info-circle"></i>
+              </button>
+            </div>
+          </div>
+          
+          <div class="action-item">
+            <div class="action-time">
+              <div class="date">4/17</div>
+              <div class="time">10:00</div>
+            </div>
+            <div class="action-details">
+              <div class="action-title">鈴木一郎様（2回目）</div>
+              <div class="action-meta">Google Meet</div>
+            </div>
+            <div class="action-buttons">
+              <button class="btn-icon" title="Google Meetに参加" onclick="joinMeeting('https://meet.google.com/xyz-abcd-efg')">
+                <i class="fas fa-video"></i>
+              </button>
+              <button class="btn-icon" title="詳細" onclick="viewSessionDetails('S003')">
+                <i class="fas fa-info-circle"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="right-panel">
+        <div class="section-header">
+          <h2><i class="fas fa-tasks"></i> 対応が必要なタスク</h2>
+        </div>
+        <div id="pending-tasks" class="action-list">
+          <div class="action-item">
+            <div class="action-icon warning">
+              <i class="fas fa-user-plus"></i>
+            </div>
+            <div class="action-details">
+              <div class="action-title">新規申込対応</div>
+              <div class="action-meta">高橋さん、田中さん</div>
+            </div>
+            <div class="action-buttons">
+              <button class="btn-icon" title="対応する" onclick="handleNewApplicants()">
+                <i class="fas fa-arrow-right"></i>
+              </button>
+            </div>
+          </div>
+          
+          <div class="action-item">
+            <div class="action-icon alert">
+              <i class="fas fa-calendar-alt"></i>
+            </div>
+            <div class="action-details">
+              <div class="action-title">日程調整が必要</div>
+              <div class="action-meta">山本さん（継続2回目）</div>
+            </div>
+            <div class="action-buttons">
+              <button class="btn-icon" title="対応する" onclick="scheduleSession('C007')">
+                <i class="fas fa-arrow-right"></i>
+              </button>
+            </div>
+          </div>
+          
+          <div class="action-item">
+            <div class="action-icon info">
+              <i class="fas fa-envelope"></i>
+            </div>
+            <div class="action-details">
+              <div class="action-title">リマインダー送信</div>
+              <div class="action-meta">佐藤さん（3回目セッション）</div>
+            </div>
+            <div class="action-buttons">
+              <button class="btn-icon" title="メール送信" onclick="sendReminder('S002')">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <!-- クライアント一覧セクション -->
+    <section id="clients-section" class="dashboard-section">
+      <div class="section-header">
+        <h2><i class="fas fa-user-friends"></i> クライアント一覧</h2>
+        <div class="filter-tabs">
+          <button class="filter-tab active" data-filter="all">全て</button>
+          <button class="filter-tab" data-filter="trial">トライアル</button>
+          <button class="filter-tab" data-filter="active">継続中</button>
+          <button class="filter-tab" data-filter="completed">完了</button>
+        </div>
+      </div>
+      
+      <div class="table-responsive">
+        <table id="clients-table" class="data-table">
+          <thead>
+            <tr>
+              <th>お名前</th>
+              <th>ステージ</th>
+              <th>次回セッション</th>
+              <th>支払い状況</th>
+              <th>進捗</th>
+              <th>アクション</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><a href="#" onclick="viewClientDetails('C001'); return false;">山田太郎</a></td>
+              <td><span class="status-badge trial">トライアル</span></td>
+              <td>2025/4/12 13:00</td>
+              <td><span class="status-badge success">入金済</span></td>
+              <td>
+                <div class="progress-bar">
+                  <div class="progress" style="width: 16.7%;" title="1/6回完了"></div>
+                </div>
+                <div class="progress-text">1/6</div>
+              </td>
+              <td>
+                <button class="btn-icon" title="詳細" onclick="viewClientDetails('C001')">
+                  <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn-icon" title="メール送信" onclick="emailClient('C001')">
+                  <i class="fas fa-envelope"></i>
+                </button>
+              </td>
+            </tr>
+            <tr>
+              <td>佐藤花子</td>
+              <td><span class="status-badge active">継続中</span></td>
+              <td>2025/4/15 15:00</td>
+              <td><span class="status-badge success">入金済</span></td>
+              <td>
+                <div class="progress-bar">
+                  <div class="progress" style="width: 50%;" title="3/6回完了"></div>
+                </div>
+                <div class="progress-text">3/6</div>
+              </td>
+              <td>
+                <button class="btn-icon" title="詳細" onclick="viewClientDetails('C002')">
+                  <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn-icon" title="メール送信" onclick="emailClient('C002')">
+                  <i class="fas fa-envelope"></i>
+                </button>
+              </td>
+            </tr>
+            <tr>
+              <td>鈴木一郎</td>
+              <td><span class="status-badge active">継続中</span></td>
+              <td>2025/4/17 10:00</td>
+              <td><span class="status-badge success">入金済</span></td>
+              <td>
+                <div class="progress-bar">
+                  <div class="progress" style="width: 33.3%;" title="2/6回完了"></div>
+                </div>
+                <div class="progress-text">2/6</div>
+              </td>
+              <td>
+                <button class="btn-icon" title="詳細" onclick="viewClientDetails('C003')">
+                  <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn-icon" title="メール送信" onclick="emailClient('C003')">
+                  <i class="fas fa-envelope"></i>
+                </button>
+              </td>
+            </tr>
+            <tr>
+              <td>高橋雅人</td>
+              <td><span class="status-badge new">新規</span></td>
+              <td>未設定</td>
+              <td><span class="status-badge warning">未入金</span></td>
+              <td>
+                <div class="progress-bar">
+                  <div class="progress" style="width: 0%;" title="0/6回完了"></div>
+                </div>
+                <div class="progress-text">0/6</div>
+              </td>
+              <td>
+                <button class="btn-icon" title="詳細" onclick="viewClientDetails('C004')">
+                  <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn-icon" title="メール送信" onclick="emailClient('C004')">
+                  <i class="fas fa-envelope"></i>
+                </button>
+              </td>
+            </tr>
+            <tr>
+              <td>田中明子</td>
+              <td><span class="status-badge completed">完了</span></td>
+              <td>-</td>
+              <td><span class="status-badge success">入金済</span></td>
+              <td>
+                <div class="progress-bar">
+                  <div class="progress" style="width: 100%;" title="6/6回完了"></div>
+                </div>
+                <div class="progress-text">6/6</div>
+              </td>
+              <td>
+                <button class="btn-icon" title="詳細" onclick="viewClientDetails('C005')">
+                  <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn-icon" title="メール送信" onclick="emailClient('C005')">
+                  <i class="fas fa-envelope"></i>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    
+    <!-- 週間スケジュールセクション -->
+    <section id="schedule-section" class="dashboard-section">
+      <div class="section-header">
+        <h2><i class="fas fa-calendar-week"></i> 週間スケジュール</h2>
+      </div>
+      <div id="weekly-calendar" class="calendar-view">
+        <div class="calendar-header">
+          <button class="btn-icon" onclick="previousWeek()">
+            <i class="fas fa-chevron-left"></i>
+          </button>
+          <h3 id="calendar-title">2025年4月11日 - 4月17日</h3>
+          <button class="btn-icon" onclick="nextWeek()">
+            <i class="fas fa-chevron-right"></i>
+          </button>
+        </div>
+        <div class="calendar-grid">
+          <div class="calendar-day">
+            <div class="day-header">4/11（木）</div>
+            <div class="day-events">
+              <div class="calendar-event">
+                <div class="event-time">13:00</div>
+                <div class="event-title">山田太郎様（トライアル）</div>
+              </div>
+            </div>
+          </div>
+          <div class="calendar-day">
+            <div class="day-header">4/12（金）</div>
+            <div class="day-events"></div>
+          </div>
+          <div class="calendar-day">
+            <div class="day-header">4/13（土）</div>
+            <div class="day-events"></div>
+          </div>
+          <div class="calendar-day">
+            <div class="day-header">4/14（日）</div>
+            <div class="day-events"></div>
+          </div>
+          <div class="calendar-day">
+            <div class="day-header">4/15（月）</div>
+            <div class="day-events">
+              <div class="calendar-event">
+                <div class="event-time">15:00</div>
+                <div class="event-title">佐藤花子様（3回目）</div>
+              </div>
+            </div>
+          </div>
+          <div class="calendar-day">
+            <div class="day-header">4/16（火）</div>
+            <div class="day-events"></div>
+          </div>
+          <div class="calendar-day">
+            <div class="day-header">4/17（水）</div>
+            <div class="day-events">
+              <div class="calendar-event">
+                <div class="event-time">10:00</div>
+                <div class="event-title">鈴木一郎様（2回目）</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- フッター -->
+  <footer>
+    <div class="copyright">
+      &copy; 2025 マインドエンジニアリング・コーチング 森山雄太
+    </div>
+  </footer>
+  
+  <!-- モーダル：新規セッション予約 -->
+  <div id="new-session-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>新規セッション予約</h3>
+        <button class="close-modal" onclick="closeModal('new-session-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="client-select">クライアント</label>
+          <select id="client-select" class="form-control">
+            <option value="">クライアントを選択</option>
+            <option value="C001">山田太郎</option>
+            <option value="C002">佐藤花子</option>
+            <option value="C003">鈴木一郎</option>
+            <option value="C004">高橋雅人</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="session-type">セッション種別</label>
+          <select id="session-type" class="form-control">
+            <option value="trial">トライアル</option>
+            <option value="regular">継続セッション</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="session-date">日時</label>
+          <input type="datetime-local" id="session-date" class="form-control">
+        </div>
+        <div class="form-group">
+          <label for="session-format">形式</label>
+          <select id="session-format" class="form-control">
+            <option value="online">オンライン (Google Meet)</option>
+            <option value="inperson">対面</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('new-session-modal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="createNewSession()">予約する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- モーダル：セッション詳細 -->
+  <div id="session-details-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>セッション詳細</h3>
+        <button class="close-modal" onclick="closeModal('session-details-modal')">&times;</button>
+      </div>
+      <div class="modal-body" id="session-details-content">
+        <!-- セッション詳細がここに動的に入ります -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('session-details-modal')">閉じる</button>
+        <button class="btn btn-primary" onclick="completeSession()">セッション完了</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- モーダル：クライアント詳細 -->
+  <div id="client-details-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="client-name-header">クライアント詳細</h3>
+        <button class="close-modal" onclick="closeModal('client-details-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="basic-info">基本情報</button>
+          <button class="tab-btn" data-tab="session-history">セッション履歴</button>
+          <button class="tab-btn" data-tab="payment-history">支払い履歴</button>
+          <button class="tab-btn" data-tab="notes">メモ</button>
+        </div>
+        
+        <!-- 基本情報タブ -->
+        <div id="basic-info" class="tab-content active">
+          <div class="client-info-grid">
+            <div class="info-item">
+              <div class="info-label">お名前</div>
+              <div id="client-name" class="info-value"></div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">お名前（カナ）</div>
+              <div id="client-name-kana" class="info-value"></div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">メールアドレス</div>
+              <div id="client-email" class="info-value"></div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">電話番号</div>
+              <div id="client-phone" class="info-value"></div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">性別</div>
+              <div id="client-gender" class="info-value"></div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">生年月日</div>
+              <div id="client-birthdate" class="info-value"></div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">ご住所</div>
+              <div id="client-address" class="info-value"></div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">希望セッション形式</div>
+              <div id="client-session-format" class="info-value"></div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">備考欄</div>
+              <div id="client-notes" class="info-value"></div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">次回セッション</div>
+              <div id="client-next-session" class="info-value"></div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- セッション履歴タブ -->
+        <div id="session-history" class="tab-content">
+          <div class="table-responsive">
+            <table class="data-table" id="sessions-table">
+              <thead>
+                <tr>
+                  <th>日時</th>
+                  <th>種別</th>
+                  <th>回数</th>
+                  <th>形式</th>
+                  <th>ステータス</th>
+                  <th>アクション</th>
+                </tr>
+              </thead>
+              <tbody id="sessions-table-body">
+                <!-- セッションデータがここに動的に挿入されます -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <!-- 支払い履歴タブ -->
+        <div id="payment-history" class="tab-content">
+          <div class="table-responsive">
+            <table class="data-table" id="payments-table">
+              <thead>
+                <tr>
+                  <th>日付</th>
+                  <th>項目</th>
+                  <th>金額</th>
+                  <th>状態</th>
+                  <th>備考</th>
+                </tr>
+              </thead>
+              <tbody id="payments-table-body">
+                <!-- 支払いデータがここに動的に挿入されます -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <!-- メモタブ -->
+        <div id="notes" class="tab-content">
+          <div class="notes-container">
+            <h4>セッションメモ</h4>
+            <div id="session-notes-container">
+              <!-- セッションメモがここに動的に挿入されます -->
+            </div>
+            <div class="add-note-section">
+              <h4>新規メモ追加</h4>
+              <textarea id="new-note-content" class="form-control" rows="4" placeholder="メモを入力してください..."></textarea>
+              <button class="btn btn-primary mt-10" onclick="saveClientNote()">保存</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('client-details-modal')">閉じる</button>
+        <button class="btn btn-primary" onclick="scheduleNewSessionForClient()">新規セッション予約</button>
+        <button class="btn btn-info" onclick="emailSelectedClient()">メール送信</button>
+      </div>
+    </div>
+  </div>
+
+  <?!= include('JavaScript'); ?>
+</body>
+</html>
