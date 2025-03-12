@@ -7,14 +7,14 @@
   
   // ===== 初期化処理 =====
   document.addEventListener('DOMContentLoaded', function() {
-    // クライアントサイドだけで動作するダミーデータの表示（後でサーバーサイドに置き換え）
-    initializeDummyData();
-    
     // フィルタータブのイベントリスナー設定
     setupFilterTabs();
     
     // モーダルの閉じるボタン設定
     setupModalCloseEvents();
+    
+    // 実際のデータを読み込む
+    loadDashboardData();
   });
   
   // ===== ダッシュボードデータの読み込み =====
@@ -424,80 +424,73 @@
     selectedSessionId = sessionId;
     showLoadingIndicator();
     
-    // ここでサーバーからセッション詳細を取得する実装を追加
-    // 現在のテスト実装ではダミーデータを表示
+    // サーバーからセッション詳細を取得
+    google.script.run
+      .withSuccessHandler(displaySessionDetails)
+      .withFailureHandler(handleError)
+      .getSessionDetails(sessionId);
+  }
+  
+  function displaySessionDetails(sessionDetails) {
+    hideLoadingIndicator();
     
-    // セッション詳細のダミーデータ
-    const sessionDetails = {
-      id: sessionId,
-      client: {
-        id: 'C001',
-        name: '山田太郎'
-      },
-      type: 'トライアル',
-      date: '2025年4月11日 13:00',
-      format: 'オンライン（Google Meet）',
-      meetUrl: 'https://meet.google.com/abc-defg-hij',
-      status: '予定済',
-      notes: ''
-    };
+    if (sessionDetails.error) {
+      alert(sessionDetails.error);
+      return;
+    }
     
-    setTimeout(() => {
-      hideLoadingIndicator();
-      
-      // モーダル内容の更新
-      const content = document.getElementById('session-details-content');
-      content.innerHTML = `
-        <div class="details-group">
-          <div class="details-label">クライアント:</div>
-          <div class="details-value">${sessionDetails.client.name}</div>
+    // モーダル内容の更新
+    const content = document.getElementById('session-details-content');
+    content.innerHTML = `
+      <div class="details-group">
+        <div class="details-label">クライアント:</div>
+        <div class="details-value">${sessionDetails.client.name}</div>
+      </div>
+      <div class="details-group">
+        <div class="details-label">セッション種別:</div>
+        <div class="details-value">${sessionDetails.type}</div>
+      </div>
+      <div class="details-group">
+        <div class="details-label">日時:</div>
+        <div class="details-value">${sessionDetails.date}</div>
+      </div>
+      <div class="details-group">
+        <div class="details-label">形式:</div>
+        <div class="details-value">${sessionDetails.format}</div>
+      </div>
+      ${sessionDetails.meetUrl ? `
+      <div class="details-group">
+        <div class="details-label">Google Meet:</div>
+        <div class="details-value">
+          <a href="${sessionDetails.meetUrl}" target="_blank">${sessionDetails.meetUrl}</a>
         </div>
-        <div class="details-group">
-          <div class="details-label">セッション種別:</div>
-          <div class="details-value">${sessionDetails.type}</div>
+      </div>
+      ` : ''}
+      <div class="details-group">
+        <div class="details-label">ステータス:</div>
+        <div class="details-value">${sessionDetails.status}</div>
+      </div>
+      <div class="details-group">
+        <div class="details-label">備考:</div>
+        <div class="details-value">
+          <textarea id="session-notes" class="form-control" rows="3">${sessionDetails.notes || ''}</textarea>
         </div>
-        <div class="details-group">
-          <div class="details-label">日時:</div>
-          <div class="details-value">${sessionDetails.date}</div>
+      </div>
+      <div class="details-group">
+        <div class="details-label">アクション:</div>
+        <div class="details-value">
+          <button class="btn btn-info" onclick="sendReminderEmail('${sessionId}')">
+            <i class="fas fa-paper-plane"></i> リマインダー送信
+          </button>
+          <button class="btn btn-warning" onclick="rescheduleSession('${sessionId}')">
+            <i class="fas fa-calendar-alt"></i> 日程変更
+          </button>
         </div>
-        <div class="details-group">
-          <div class="details-label">形式:</div>
-          <div class="details-value">${sessionDetails.format}</div>
-        </div>
-        ${sessionDetails.meetUrl ? `
-        <div class="details-group">
-          <div class="details-label">Google Meet:</div>
-          <div class="details-value">
-            <a href="${sessionDetails.meetUrl}" target="_blank">${sessionDetails.meetUrl}</a>
-          </div>
-        </div>
-        ` : ''}
-        <div class="details-group">
-          <div class="details-label">ステータス:</div>
-          <div class="details-value">${sessionDetails.status}</div>
-        </div>
-        <div class="details-group">
-          <div class="details-label">備考:</div>
-          <div class="details-value">
-            <textarea id="session-notes" class="form-control" rows="3">${sessionDetails.notes}</textarea>
-          </div>
-        </div>
-        <div class="details-group">
-          <div class="details-label">アクション:</div>
-          <div class="details-value">
-            <button class="btn btn-info" onclick="sendReminderEmail('${sessionId}')">
-              <i class="fas fa-paper-plane"></i> リマインダー送信
-            </button>
-            <button class="btn btn-warning" onclick="rescheduleSession('${sessionId}')">
-              <i class="fas fa-calendar-alt"></i> 日程変更
-            </button>
-          </div>
-        </div>
-      `;
-      
-      // モーダルを表示
-      document.getElementById('session-details-modal').style.display = 'block';
-    }, 500);
+      </div>
+    `;
+    
+    // モーダルを表示
+    document.getElementById('session-details-modal').style.display = 'block';
   }
   
   function completeSession() {
@@ -834,11 +827,26 @@
     alert('処理中にエラーが発生しました。もう一度お試しください。');
   }
   
-  // ===== 初期化用ダミー関数（実装前のテスト用）=====
-  function initializeDummyData() {
-    // データロードをシミュレート（実際の実装では削除）
-    setTimeout(() => {
-      loadDashboardData();
-    }, 500);
+  function sendReminderEmail(sessionId) {
+    showLoadingIndicator();
+    
+    // リマインダー送信API呼び出し
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoadingIndicator();
+        if (result && result.success) {
+          alert('リマインダーメールを送信しました！');
+          loadDashboardData(); // データを再読み込み
+        } else {
+          alert('エラー: ' + (result.error || 'メール送信に失敗しました'));
+        }
+      })
+      .withFailureHandler(handleError)
+      .sendReminderEmail(sessionId);
+  }
+  
+  function rescheduleSession(sessionId) {
+    // 日程変更機能は今後実装予定
+    alert('日程変更機能は現在開発中です。');
   }
 </script>
