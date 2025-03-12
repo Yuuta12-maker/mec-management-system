@@ -15,16 +15,26 @@
     
     // 実際のデータを読み込む
     loadDashboardData();
+    
+    console.log("初期化処理完了 - ダッシュボードデータ読み込み開始");
   });
   
   // ===== ダッシュボードデータの読み込み =====
   function loadDashboardData() {
     showLoadingIndicator();
     
+    console.log("ダッシュボードデータ読み込み中...");
+    
     // 実際のデータ取得
     google.script.run
-      .withSuccessHandler(updateDashboard)
-      .withFailureHandler(handleError)
+      .withSuccessHandler(function(data) {
+        console.log("データ取得成功");
+        updateDashboard(data);
+      })
+      .withFailureHandler(function(error) {
+        console.error("データ取得エラー: ", error);
+        handleError(error);
+      })
       .getDashboardData();
   }
   
@@ -51,6 +61,8 @@
     
     // 週間スケジュール更新
     updateWeeklySchedule(data.weeklySchedule);
+    
+    console.log("ダッシュボード更新完了");
   }
   
   // ===== サマリーセクション更新 =====
@@ -290,7 +302,7 @@
       let events = '';
       if (day.events && day.events.length > 0) {
         events = day.events.map(event => `
-          <div class="calendar-event">
+          <div class="calendar-event" onclick="viewSessionDetails('${event.id}')">
             <div class="event-time">${event.time}</div>
             <div class="event-title">${event.clientName}様（${event.type}${event.sessionNumber ? event.sessionNumber + '回目' : ''}）</div>
           </div>
@@ -400,6 +412,7 @@
     }
     
     showLoadingIndicator();
+    console.log("新規セッション作成中...");
     
     // セッション作成
     google.script.run
@@ -423,6 +436,7 @@
   function viewSessionDetails(sessionId) {
     selectedSessionId = sessionId;
     showLoadingIndicator();
+    console.log("セッション詳細取得中...", sessionId);
     
     // サーバーからセッション詳細を取得
     google.script.run
@@ -435,9 +449,11 @@
     hideLoadingIndicator();
     
     if (sessionDetails.error) {
-      alert(sessionDetails.error);
+      alert('セッション詳細取得エラー: ' + sessionDetails.error);
       return;
     }
+    
+    console.log("セッション詳細表示", sessionDetails);
     
     // モーダル内容の更新
     const content = document.getElementById('session-details-content');
@@ -479,10 +495,10 @@
       <div class="details-group">
         <div class="details-label">アクション:</div>
         <div class="details-value">
-          <button class="btn btn-info" onclick="sendReminderEmail('${sessionId}')">
+          <button class="btn btn-info" onclick="sendReminderEmail('${selectedSessionId}')">
             <i class="fas fa-paper-plane"></i> リマインダー送信
           </button>
-          <button class="btn btn-warning" onclick="rescheduleSession('${sessionId}')">
+          <button class="btn btn-warning" onclick="rescheduleSession('${selectedSessionId}')">
             <i class="fas fa-calendar-alt"></i> 日程変更
           </button>
         </div>
@@ -499,6 +515,7 @@
     const notes = document.getElementById('session-notes').value;
     
     showLoadingIndicator();
+    console.log("セッション完了処理中...");
     
     // セッション完了処理
     google.script.run
@@ -529,6 +546,7 @@
     
     // データ取得開始
     showLoadingIndicator();
+    console.log("クライアント詳細取得中...", clientId);
     
     // クライアント詳細を取得
     google.script.run
@@ -539,11 +557,14 @@
 
   // クライアント詳細データをモーダルに表示
   function displayClientDetails(clientData) {
+    hideLoadingIndicator();
+    
     if (clientData.error) {
-      hideLoadingIndicator();
-      alert(clientData.error);
+      alert('クライアント詳細取得エラー: ' + clientData.error);
       return;
     }
+    
+    console.log("クライアント詳細表示", clientData);
     
     // 基本情報表示
     document.getElementById('client-name-header').textContent = clientData.basicInfo.name + ' 様';
@@ -632,7 +653,6 @@
     setupTabs();
     
     // モーダルを表示
-    hideLoadingIndicator();
     document.getElementById('client-details-modal').style.display = 'block';
   }
 
@@ -668,8 +688,11 @@
     // 文字列から変換
     try {
       const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr; // 無効な日付の場合はそのまま返す
+      
       return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
     } catch (e) {
+      console.error("日付フォーマットエラー:", e);
       return dateStr;
     }
   }
@@ -704,6 +727,7 @@
     }
     
     showLoadingIndicator();
+    console.log("クライアントメモ保存中...");
     
     // メモを保存
     google.script.run
@@ -763,6 +787,7 @@
   
   function sendReminder(sessionId) {
     showLoadingIndicator();
+    console.log("リマインダー送信中...");
     
     // リマインダー送信
     google.script.run
@@ -824,11 +849,18 @@
   function handleError(error) {
     hideLoadingIndicator();
     console.error('エラーが発生しました:', error);
-    alert('処理中にエラーが発生しました。もう一度お試しください。');
+    alert('処理中にエラーが発生しました。もう一度お試しください。\n\nエラー詳細: ' + error);
+    
+    // エラーメッセージが画面に表示されるのを防ぐ
+    const errorElement = document.getElementById('error-output');
+    if (errorElement) {
+      errorElement.style.display = 'none';
+    }
   }
   
   function sendReminderEmail(sessionId) {
     showLoadingIndicator();
+    console.log("リマインダーメール送信中...");
     
     // リマインダー送信API呼び出し
     google.script.run
